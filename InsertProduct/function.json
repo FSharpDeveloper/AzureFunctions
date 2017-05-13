@@ -7,7 +7,8 @@
       "direction": "in",
       "methods": [
         "post"
-      ]
+      ],
+      "route": "members"
     },
     {
       "name": "res",

@@ -4,10 +4,14 @@
       "authLevel": "anonymous",
       "name": "req",
       "type": "httpTrigger",
-      "direction": "in"
+      "direction": "in",
+      "route": "member/{id}",
+      "methods": [
+        "get"
+      ]
     },
     {
-      "name": "res",
+      "name": "$return",
       "type": "http",
       "direction": "out"
     }

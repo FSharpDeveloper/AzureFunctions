@@ -4,7 +4,11 @@
       "authLevel": "anonymous",
       "name": "req",
       "type": "httpTrigger",
-      "direction": "in"
+      "direction": "in",
+      "route": "members",
+      "methods": [
+        "get"
+      ]
     },
     {
       "name": "res",

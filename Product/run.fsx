@@ -3,63 +3,74 @@
 #r "System.Data"
 open System.Net
 open System.Net.Http
+open System.Data
 open System.Data.SqlClient
 open System.Threading
 open Newtonsoft.Json
+open Newtonsoft.Json.Linq
 
-type Named = {
-    name: string
-}
+type reqParams = {
+    id:int
+ }
 [<CLIMutable>]
-[<NoComparison>]
-type Parameter = { Name:string; Value: obj }
+type Member = {
+        Id:int
+        FirstName:string
+        LastName:string
+        EmailAddress:string
+        CreatedAt:DateTime
+        ModifiedAt:DateTime
+    }
+    with 
+    static member fromDataReader(rdr:IDataReader) = 
+        rdr.Read() |> ignore
+        {
+            Id = Convert.ToInt32 rdr.["Id"]
+            FirstName = Convert.ToString rdr.["FirstName"]
+            LastName = Convert.ToString rdr.["LastName"]
+            EmailAddress = Convert.ToString rdr.["EmailAddress"]
+            CreatedAt = Convert.ToDateTime rdr.["CreatedAt"]
+            ModifiedAt = Convert.ToDateTime rdr.["ModifiedAt"]
+        }
+            
 
-[<CLIMutable>]
-type CommandData = { Sql:String; Parameters:Parameter array; ConnectionString:string }
+    static member getId(id:int):Member option =
+        let connectionString = "Server=tcp:netcoredbs.database.windows.net,1433;Initial Catalog=netcoredynamicsDb;Persist Security Info=False;User ID=dbazureuser;Password=Mrullerp!014;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+        let selectQuery = "Select Id, FirstName,LastName, EmailAddress, CreatedAt, ModifiedAt From Member Where Id = @Id"
+        //use connection = new SqlConnection(connectionString)
+        use command = (new SqlConnection(connectionString)).CreateCommand()        
+        command.CommandText <- selectQuery
+        command.Parameters.AddWithValue("@Id", id)|> ignore
+        command.Connection.Open()
+        let reader = command.ExecuteReader()
+        if reader.HasRows then 
+            Some (Member.fromDataReader(reader))
+        else 
+            None
 
-let ConnectionString = "Server=tcp:netcoredbs.database.windows.net,1433;Initial Catalog=netcoredynamicsDb;Persist Security Info=False;User ID=dbazureuser;Password=Mrullerp!014;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-let InsertQuery = "Insert Into [Member] ([GroupId], [FirstName], [LastName], [EmailAddress], [CreatedAt], [ModifiedAt]) Values (@GroupId, @FirstName, @LastName, @Address, @CreatedAt, @ModifiedAt)"
-let Parameters = 
-    [
-        {Name="@GroupId"; Value=1}; {Name="@FirstName"; Value="firstName"}; 
-        {Name="@LastName"; Value="lastName"}; {Name="@Address"; Value="address"};
-        {Name="@CreatedAt"; Value="12/12/2012 12:00:00"}; {Name="@ModifiedAt"; Value="12/12/2012 12:00:00"};                
-    ]
-    |> List.toArray
 
-let ExecuteNonQueryAsync data= 
-        use connection = new SqlConnection(data.ConnectionString)
-        use command = new SqlCommand(data.Sql, connection)
-        data.Parameters
-        |> Seq.map (fun i -> SqlParameter(i.Name,i.Value))
-        |> Seq.toArray
-        |> command.Parameters.AddRange
-
-        connection.Open() |> ignore
-        let result = command.ExecuteNonQueryAsync() 
-        result
-
-let Run(req: HttpRequestMessage, log: TraceWriter) =
+let Run(req: HttpRequestMessage, id:int, log: TraceWriter) =
     async {
         log.Info(sprintf 
             "F# HTTP trigger function processed a request.")
-
-        ExecuteNonQueryAsync {Sql=InsertQuery;Parameters=Parameters;ConnectionString=ConnectionString} |> Async.AwaitTask
-
+        //let ConnectionString = "Server=tcp:netcoredbs.database.windows.net,1433;Initial Catalog=netcoredynamicsDb;Persist Security Info=False;User ID=dbazureuser;Password=Mrullerp!014;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+        //let selectQuery = "Select Id, FirstName,LastName, EmailAddress, CreatedAt, ModifiedAt From Member Where Id = @Id"
         // Set name to query string
         let name =
             req.GetQueryNameValuePairs()
-            |> Seq.tryFind (fun q -> q.Key = "name")
+            |> Seq.tryFind (fun q -> q.Key = "id")
+            
 
-        match name with
-        | Some x ->
-            return req.CreateResponse(HttpStatusCode.OK, "Hello " + x.Value);
-        | None ->
-            let! data = req.Content.ReadAsStringAsync() |> Async.AwaitTask
+        if id <> 0 then 
+           let result = Member.getId(id)                 
+           match result with 
+           | Some r -> 
+                log.Info(sprintf "result %s" r.FirstName)
+                return req.CreateResponse(HttpStatusCode.OK, r)
+           | None -> 
+                return req.CreateResponse(HttpStatusCode.NotFound, "");
+        else 
+            return req.CreateResponse(HttpStatusCode.BadRequest, "")
 
-            if not (String.IsNullOrEmpty(data)) then
-                let named = JsonConvert.DeserializeObject<Named>(data)
-                return req.CreateResponse(HttpStatusCode.OK, "Hello " + named.name);
-            else
-                return req.CreateResponse(HttpStatusCode.BadRequest, "Specify a Name value");
+
     } |> Async.RunSynchronously
