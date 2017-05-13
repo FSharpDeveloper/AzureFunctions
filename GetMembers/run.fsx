@@ -1,65 +1,76 @@
 #r "System.Net.Http"
 #r "Newtonsoft.Json"
-#r "FSharp.Data"
 #r "System.Data"
-#r "System.Data.SqlClient"
-
 open System.Net
 open System.Net.Http
 open System.Data
 open System.Data.SqlClient
+open System.Threading
 open Newtonsoft.Json
-open FSharp.Data
+open Newtonsoft.Json.Linq
 
-type Named = {
-    name:string
-}
+type reqParams = {
+    id:int
+ }
 [<CLIMutable>]
 type Member = {
-    Id: int
-    FirstName: string
-    LastName: string
-    // EmailAddress: string
-    // CreatedAt:DateTime
-    // ModifiedAt:DateTime
-} with
-    static member fromReader(rdr:IDataReader) = {
+        Id:int
+        FirstName:string
+        LastName:string
+        EmailAddress:string
+        CreatedAt:DateTime
+        ModifiedAt:DateTime
+    }
+    with 
+    static member fromDataReader(rdr:IDataReader) = 
+        rdr.Read() |> ignore
         {
             Id = Convert.ToInt32 rdr.["Id"]
             FirstName = Convert.ToString rdr.["FirstName"]
             LastName = Convert.ToString rdr.["LastName"]
-            // EmailAddress = Convert.ToString rdr.["EmailAddress"]
-            // CreatedAt = Convert.ToDateTime rdr.["CreatedAt"]
-            // ModifiedAt = Convert.ToDateTime rdr.["ModifiedAt"]
+            EmailAddress = Convert.ToString rdr.["EmailAddress"]
+            CreatedAt = Convert.ToDateTime rdr.["CreatedAt"]
+            ModifiedAt = Convert.ToDateTime rdr.["ModifiedAt"]
         }
-    }
+            
 
-    static member asSeq(rdr:IDataReader) = seq {
-        while rdr.Read() do
-            yield person.fromReader rdr
-    }
+    static member getId(id:int):Member option =
+        let connectionString = "Server=tcp:netcoredbs.database.windows.net,1433;Initial Catalog=netcoredynamicsDb;Persist Security Info=False;User ID=dbazureuser;Password=Mrullerp!014;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+        let selectQuery = "Select Id, FirstName,LastName, EmailAddress, CreatedAt, ModifiedAt From Member Where Id = @Id"
+        //use connection = new SqlConnection(connectionString)
+        use command = (new SqlConnection(connectionString)).CreateCommand()        
+        command.CommandText <- selectQuery
+        command.Parameters.AddWithValue("@Id", id)|> ignore
+        command.Connection.Open()
+        let reader = command.ExecuteReader()
+        if reader.HasRows then 
+            Some (Member.fromDataReader(reader))
+        else 
+            None
 
 
-let Run(req: HttpRequestMessage, log: TraceWriter) =
+let Run(req: HttpRequestMessage, id:int, log: TraceWriter) =
     async {
         log.Info(sprintf 
             "F# HTTP trigger function processed a request.")
-                
-        let connectionString = "Server=tcp:netcoredbs.database.windows.net,1433;Initial Catalog=netcoredynamicsDb;Persist Security Info=False;User ID=dbazureuser;Password=Mrullerp!014;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-        let selectQuery = "Select Id, FirstName, LastName, EmailAddress, CreatedAt, ModifiedAt From Member"
-        let! selectMembers =
-            async{
-                let cnt = new SqlConnection(connectionString)
-                
-                cnt.Open() |> ignore
-                let command = new SqlCommand(selectQuery, cnt)    
-                let! reader = command.ExecuteReaderAsync() |> Async.AwaitTask
-                let result = Member.asSeq(reader)
-                return result      
-            }  
-        let members = 
-            selectMembers
-            |> Seq.toArray
+        //let ConnectionString = "Server=tcp:netcoredbs.database.windows.net,1433;Initial Catalog=netcoredynamicsDb;Persist Security Info=False;User ID=dbazureuser;Password=Mrullerp!014;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+        //let selectQuery = "Select Id, FirstName,LastName, EmailAddress, CreatedAt, ModifiedAt From Member Where Id = @Id"
+        // Set name to query string
+        let name =
+            req.GetQueryNameValuePairs()
+            |> Seq.tryFind (fun q -> q.Key = "id")
+            
 
-        return req.CreateResponse(HttpStatusCode.OK, members)//"Hello " + named.name);
+        if id <> 0 then 
+           let result = Member.getId(id)                 
+           match result with 
+           | Some r -> 
+                log.Info(sprintf "result %s" r.FirstName)
+                return req.CreateResponse(HttpStatusCode.OK, r)
+           | None -> 
+                return req.CreateResponse(HttpStatusCode.NotFound, "");
+        else 
+            return req.CreateResponse(HttpStatusCode.BadRequest, "")
+
+
     } |> Async.RunSynchronously
