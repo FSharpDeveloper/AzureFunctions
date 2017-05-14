@@ -15,11 +15,11 @@ this samples is the code used in my tutorial series about using F# in real world
 
 #### 
 - telecharger dotnetcore cli (Command Line Tools) depuis ce lien :
-  [dotnetcore 1.1]https://www.microsoft.com/net/core#windowscmd
+  [dotnetcore 1.1](https://www.microsoft.com/net/core#windowscmd)
 - telecharger nodejs (npm est inclus) depuis ce lien : 
-  [nodejs]https://nodejs.org/en/
+  [nodejs](https://nodejs.org/en/)
 - telecharger l'IDE Visual Studio Code depuis ce lien : 
-  [VS Code]https://code.visualstudio.com/
+  [VS Code](https://code.visualstudio.com/)
 - sur une ligne de commande tapper la commande suivante :
   npm -i -g azure-functions-cli
 - une fois l'installation terminer vous pouve\ creer une nouvelle Azure Function en tappant :
